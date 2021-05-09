@@ -1,0 +1,12 @@
+{
+  "recommendations": [
+    "mgmcdermott.vscode-language-babel",
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "christian-kohler.path-intellisense",
+    "eamodio.gitlens",
+    "apollographql.vscode-apollo",
+    "auchenberg.vscode-browser-preview",
+    "msjsdiag.debugger-for-chrome"
+  ]
+}
