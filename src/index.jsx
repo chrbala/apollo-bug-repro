@@ -1,67 +1,40 @@
 /*** SCHEMA ***/
-import {
-  GraphQLSchema,
-  GraphQLObjectType,
-  GraphQLID,
-  GraphQLString,
-  GraphQLList,
-} from 'graphql';
-const PersonType = new GraphQLObjectType({
-  name: 'Person',
-  fields: {
-    id: { type: GraphQLID },
-    name: { type: GraphQLString },
-  },
+import { makeExecutableSchema } from "@graphql-tools/schema";
+import { addMocksToSchema } from "@graphql-tools/mock";
+
+const typeDefs = `
+type Value {
+  item: Item
+}
+
+type Container {
+  text: String!
+  value: Value!
+}
+
+type Item {
+  id: ID!
+  value: Container!
+}
+
+type Query {
+  item(id: ID!): Item!
+}
+`;
+
+export const schema = addMocksToSchema({
+  schema: makeExecutableSchema({ typeDefs }),
 });
-
-const peopleData = [
-  { id: 1, name: 'John Smith' },
-  { id: 2, name: 'Sara Smith' },
-  { id: 3, name: 'Budd Deey' },
-];
-
-const QueryType = new GraphQLObjectType({
-  name: 'Query',
-  fields: {
-    people: {
-      type: new GraphQLList(PersonType),
-      resolve: () => peopleData,
-    },
-  },
-});
-
-const MutationType = new GraphQLObjectType({
-  name: 'Mutation',
-  fields: {
-    addPerson: {
-      type: PersonType,
-      args: {
-        name: { type: GraphQLString },
-      },
-      resolve: function (_, { name }) {
-        const person = {
-          id: peopleData[peopleData.length - 1].id + 1,
-          name,
-        };
-
-        peopleData.push(person);
-        return person;
-      }
-    },
-  },
-});
-
-const schema = new GraphQLSchema({ query: QueryType, mutation: MutationType });
 
 /*** LINK ***/
 import { graphql, print } from "graphql";
 import { ApolloLink, Observable } from "@apollo/client";
 function delay(wait) {
-  return new Promise(resolve => setTimeout(resolve, wait));
+  return new Promise((resolve) => setTimeout(resolve, wait));
 }
 
-const link = new ApolloLink(operation => {
-  return new Observable(async observer => {
+const link = new ApolloLink((operation) => {
+  return new Observable(async (observer) => {
     const { query, operationName, variables } = operation;
     await delay(300);
     try {
@@ -71,8 +44,9 @@ const link = new ApolloLink(operation => {
         null,
         null,
         variables,
-        operationName,
+        operationName
       );
+      console.log(result);
       observer.next(result);
       observer.complete();
     } catch (err) {
@@ -82,7 +56,7 @@ const link = new ApolloLink(operation => {
 });
 
 /*** APP ***/
-import React, { useState } from "react";
+import React from "react";
 import { render } from "react-dom";
 import {
   ApolloClient,
@@ -90,92 +64,55 @@ import {
   InMemoryCache,
   gql,
   useQuery,
-  useMutation,
 } from "@apollo/client";
 import "./index.css";
 
-const ALL_PEOPLE = gql`
-  query AllPeople {
-    people {
+const RECURSIVE = gql`
+  query Query {
+    item(id: "123") {
       id
-      name
+      value {
+        ...ContainerFragment
+      }
     }
   }
-`;
 
-const ADD_PERSON = gql`
-  mutation AddPerson($name: String) {
-    addPerson(name: $name) {
-      id
-      name
+  fragment ContainerFragment on Container {
+    value {
+      ...ValueFragment
+      item {
+        id
+        value {
+          text
+        }
+      }
+    }
+  }
+
+  fragment ValueFragment on Value {
+    item {
+      ...ItemFragment
+    }
+  }
+
+  fragment ItemFragment on Item {
+    value {
+      value {
+        __typename
+      }
     }
   }
 `;
 
 function App() {
-  const [name, setName] = useState('');
-  const {
-    loading,
-    data,
-  } = useQuery(ALL_PEOPLE);
+  const { loading, data } = useQuery(RECURSIVE);
 
-  const [addPerson] = useMutation(ADD_PERSON, {
-    update: (cache, { data: { addPerson: addPersonData } }) => {
-      const peopleResult = cache.readQuery({ query: ALL_PEOPLE });
-
-      cache.writeQuery({
-        query: ALL_PEOPLE,
-        data: {
-          ...peopleResult,
-          people: [
-            ...peopleResult.people,
-            addPersonData,
-          ],
-        },
-      });
-    },
-  });
-
-  return (
-    <main>
-      <h1>Apollo Client Issue Reproduction</h1>
-      <p>
-        This application can be used to demonstrate an error in Apollo Client.
-      </p>
-      <div className="add-person">
-        <label htmlFor="name">Name</label>
-        <input
-          type="text"
-          name="name"
-          value={name}
-          onChange={evt => setName(evt.target.value)}
-        />
-        <button
-          onClick={() => {
-            addPerson({ variables: { name } });
-            setName('');
-          }}
-        >
-          Add person
-        </button>
-      </div>
-      <h2>Names</h2>
-      {loading ? (
-        <p>Loading…</p>
-      ) : (
-        <ul>
-          {data?.people.map(person => (
-            <li key={person.id}>{person.name}</li>
-          ))}
-        </ul>
-      )}
-    </main>
-  );
+  return <pre>{JSON.stringify({ data }, null, 2)}</pre>;
 }
 
 const client = new ApolloClient({
-  cache: new InMemoryCache(),
-  link
+  cache: new InMemoryCache({}),
+  link,
 });
 
 render(
